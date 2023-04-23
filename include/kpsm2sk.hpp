@@ -25,6 +25,11 @@ namespace kpsm2sk
 		std::vector<Connection> links;
 	};
 	
+	typedef struct {
+		size_t fails;
+		size_t total;
+	} tuneResult;
+	
 	class Network
 	{
 	public:
@@ -78,10 +83,13 @@ namespace kpsm2sk
 			}
 		}
 		// Learning algorithm
-		inline size_t tuneWeights(const std::vector<float> &dout, float learnMul = 0.5f)
+		inline tuneResult tuneWeights(const std::vector<float> &dout, float learnMul = 0.5f)
 		{
+			reset();
+			run();
 			float currentErr = calculateError(dout);
 			size_t fails = 0;
+			size_t total = 0;
 			
 			for (size_t i = mat.size() - 1; i != 0; --i)
 			{
@@ -90,10 +98,13 @@ namespace kpsm2sk
 				{
 					for (auto &lnk: node.links)
 					{
+						++total;
 						float prevWeight = lnk.k;
 						float err;
 						
 						lnk.k = prevWeight + infl;
+						if (lnk.k > 1.f)
+							lnk.k = 1.f;
 						reset();
 						run();
 						err = calculateError(dout);
@@ -101,6 +112,8 @@ namespace kpsm2sk
 							continue;
 						
 						lnk.k = prevWeight - infl;
+						if (lnk.k < 0.f)
+							lnk.k = 0.f;
 						reset();
 						run();
 						err = calculateError(dout);
@@ -112,7 +125,7 @@ namespace kpsm2sk
 					}
 				}
 			}
-			return fails;
+			return {fails, total};
 		}	
 	};
 	
@@ -122,7 +135,7 @@ namespace kpsm2sk
 		assert(output > 0);
 		
 		// number of "thinking" layers, excluding output layer
-		size_t layers = input - output;
+		const size_t layers = input - output;
 		net.mat.resize(layers + 1);
 		
 		for (size_t nLayer = 0; nLayer <= layers; ++nLayer)
@@ -136,6 +149,28 @@ namespace kpsm2sk
 				for (size_t i = 0; i + 1 < nlNodes; ++i)
 				{
 					node.links.push_back(Connection {0.25f, NodeAddr {nLayer + 1, i}});
+				}
+			}
+		}
+	}
+	
+	inline void buildByConfig(Network &net, std::vector<size_t> config, float w = 0.25f)
+	{
+		const size_t layers = config.size();
+		net.mat.resize(layers);
+		
+		for (size_t nLayer = 0; nLayer < layers; ++nLayer)
+		{
+			net.mat[nLayer].resize(config[nLayer]);
+			
+			if (nLayer + 1 < layers) {
+				for (auto &node: net.mat[nLayer])
+				{
+					// insert links to all nodes in next layer
+					for (size_t i = 0; i < config[nLayer + 1]; ++i)
+					{
+						node.links.push_back(Connection {w, NodeAddr {nLayer + 1, i}});
+					}
 				}
 			}
 		}

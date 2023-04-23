@@ -23,7 +23,8 @@ int main()
 	using namespace kpsm2sk;
 	
 	Network net;
-	buildFlatFrustum(net, 9, 2);
+	const std::vector<size_t> cfg{9, 7, 5, 3, 2};
+	buildByConfig(net, cfg);
 	
 	// while (true) {
 	// 	std::cout << "> ";
@@ -60,10 +61,11 @@ int main()
 	
 	int currentSet = 0;
 	
-	for (int i = 0; i < 10; ++i) {
-		std::cout << "Iter " << i << '\n';
-		if (i % 10 == 0) {
-			currentSet = i % 20 == 0;
+	tuneResult stat;
+	
+	for (int i = 0; i < 1000000; ++i) {
+		if (i % 1000 == 0) {
+			currentSet = i % 2000 == 0;
 			if (currentSet == 0) {
 				net.loadInput(inp0);
 			} else {
@@ -71,16 +73,23 @@ int main()
 			}
 		}
 		
+		tuneResult res;
 		if (currentSet == 0) {
-			net.tuneWeights(outp0);
+			res = net.tuneWeights(outp0, 1.f);
 		} else {
-			net.tuneWeights(outp1);
+			res = net.tuneWeights(outp1, 1.f);
 		}
+		stat.fails += res.fails;
+		stat.total += res.total;
 		
-		net.reset();
-		net.run();
-		std::cout << "Tuned " << currentSet <<
-			"\n\tError 0: " << net.calculateError(outp0) <<
-			"\n\tError 1: " << net.calculateError(outp1) << '\n';
+		if (i % 100 == 0) {
+			net.reset();
+			net.run();
+			std::cout << i << ": tuned " << currentSet << "; " <<
+				net.calculateError(currentSet ? outp1 : outp0) <<
+				"; " << stat.fails << " | " << stat.total << '\n';
+			stat.fails = 0;
+			stat.total = 0;
+		}
 	}
 }
